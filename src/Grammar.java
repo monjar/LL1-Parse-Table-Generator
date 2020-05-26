@@ -90,5 +90,77 @@ public class Grammar {
         return firstOfList;
     }
 
+
+
+    public List<Symbol> findFollowSymbol1(Symbol symbol){
+        List<Rule> rulesWithSymbolList = new ArrayList<>();
+        List<Symbol> followOfList = new ArrayList<>();
+
+        rulesWithSymbolList = findRulesWithSymbol(symbol);
+
+        for(Rule rule : rulesWithSymbolList){
+            List<String> rhsList = rule.getRightHandSide();
+
+            int symbolIndexInRhs = getSymbolIndexInRhs(symbol, rhsList);
+            for (int i = symbolIndexInRhs + 1; i <= rhsList.size() ; i++) {
+                //if (i== rhsList.size())
+                   // graph[symbol][rule.getLeftHandSide()] = true;
+                List<Symbol> firstOfNext = findFirstOfSymbol(new Symbol(rhsList.get(i)));
+                int epsIndex = searchForEps(firstOfNext);
+               if (epsIndex != -1) {  //first contains epsilon
+                firstOfNext.remove(epsIndex);
+                followOfList.addAll(firstOfNext);
+                continue;
+               }
+
+               followOfList.addAll(firstOfNext);
+               break;
+
+            }
+        }
+return followOfList;
+
+    }
+
+    private int searchForEps(List<Symbol> firstOfNext) {
+        int epsIndex = -1;
+        for (int j = 0; j < firstOfNext.size(); j++) {
+            if (firstOfNext.get(j).equals("#")){
+                epsIndex = j;
+                break;
+            }
+        }
+        return epsIndex ;
+    }
+
+    private int getSymbolIndexInRhs(Symbol symbol, List<String> rhsList) {
+        for(int i = 0; i<rhsList.size(); i++){
+            if (rhsList.get(i).equals(symbol.getSymbolStr())) {
+              return  i;
+            }
+        }
+        return -1;
+    }
+
+    public  List<Rule> findRulesWithSymbol(Symbol symbol){
+        List<Rule> rulesWithSymbolList = new ArrayList<>();
+        for(Rule rule: rulesList){
+         //search symbol in the right hand side
+            if(SearchInHandSides(symbol, rule))
+                rulesWithSymbolList.add(rule);
+        }
+        return rulesWithSymbolList;
+    }
+
+    private boolean SearchInHandSides(Symbol symbol, Rule rule) {
+        //check left hand_side
+            List<String> rhsList = rule.getRightHandSide();
+            for (String rhs : rhsList)
+                if (rhs.contains(symbol.getSymbolStr()))
+                {
+                    return true;
+                }
+        return false;
+    }
 }
 

@@ -9,12 +9,21 @@ public class Main {
         //grammar.print();
 
         //this function returns the left hand side of ith rule
-        String leftOfThird = grammar.getLeftHandSide(3);
+        String leftOfThird = grammar.getLeftHandSide(9);
 
         //this function returns the right hand side of ith rule as a list
-        List<String> rightOfThird = grammar.getRightHandSide(3);
+        List<String> rightOfThird = grammar.getRightHandSide(9);
 
         System.out.println(leftOfThird);
         System.out.println(rightOfThird);
+
+        List<Symbol> s = grammar.findFollowSymbol1(new Symbol(leftOfThird));
+        List<Rule > r = grammar.findRulesWithSymbol(new Symbol(leftOfThird));
+        for (Symbol symbol : s){
+            System.out.println(symbol.getSymbolStr());
+        }
+        for (Rule rule : r){
+            rule.print();
+        }
     }
 }

@@ -1,30 +1,38 @@
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class Rule {
-    private String leftHandSide;
-    private List<String> rightHandSide;
+    private int id;
+    private Symbol leftHandSide;
+    private List<Symbol> rightHandSide;
 
-    public Rule(String[] ruleString) {
-        rightHandSide = new ArrayList<>();
-        this.leftHandSide = ruleString[0];
-        rightHandSide.addAll(Arrays.asList(ruleString).subList(2, ruleString.length));
+    public Rule(String[] ruleString, int id) {
+        List<Symbol> list = Arrays.stream(ruleString).map(Symbol::new).collect(Collectors.toList());
+        this.leftHandSide = list.get(0);
+        rightHandSide = list.subList(2,list.size());
+        this.id = id;
     }
 
-    public String getLeftHandSide() {
+    public Symbol getLeftHandSide() {
         return leftHandSide;
     }
 
-    public List<String> getRightHandSide() {
+    public List<Symbol> getRightHandSide() {
         return rightHandSide;
     }
 
     public void print(){
         System.out.print(leftHandSide + " ==> ");
-        rightHandSide.forEach((string)->{
-            System.out.print(string+ " ");
+        rightHandSide.forEach((symbol)->{
+            System.out.print(symbol.getSymbolStr()+ " ");
         });
         System.out.print("\n");
+    }
+
+    @Override
+    public String toString() {
+        return "[" + String.valueOf(id) + "]";
     }
 }

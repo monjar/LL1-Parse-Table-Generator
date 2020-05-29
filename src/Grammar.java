@@ -3,74 +3,88 @@ import java.util.stream.Collectors;
 
 public class Grammar {
     private List<Rule> rulesList;
-    private Map<Symbol , List> firstSets = new HashMap<>();
-    private Map<Symbol , List> followSets = new HashMap<>();
+    private Map<Symbol, List> firstSets = new HashMap<>();
+    private Map<Symbol, List> followSets = new HashMap<>();
+    private Set<Symbol> terminals;
+    private Set<Symbol> nonTerminals;
 
-    Grammar(List<String[]> rules ){
-
-        rulesList = rules.stream().map(Rule::new).collect(Collectors.toList());
+    Grammar(List<String[]> rules) {
+        allocateMemory();
+        for (int index = 0; index < rules.size(); index++) {
+            Rule rule = new Rule(rules.get(index), index);
+            nonTerminals.add(rule.getLeftHandSide());
+            rule.getRightHandSide().stream().filter(Symbol::isTerminal).forEach(terminals::add);
+            terminals.add(new Symbol("$"));
+            rulesList.add(rule);
+        }
     }
 
-    public void print(){
-        rulesList.forEach(Rule::print);
+    private void allocateMemory() {
+        terminals = new HashSet<>();
+        nonTerminals = new HashSet<>();
+        rulesList = new ArrayList<>();
     }
 
-    public List<String> getRightHandSide(int index){
+    public List<Symbol> getRightHandSide(int index) {
         return rulesList.get(index).getRightHandSide();
     }
 
-    public String getLeftHandSide(int index){
+    public List<Rule> getRulesList() {
+        return rulesList;
+    }
+
+    public Symbol getLeftHandSide(int index) {
         return rulesList.get(index).getLeftHandSide();
     }
 
 
-    private List<Rule> getRulesWithSymbolLHS(Symbol symbol){
+    private List<Rule> getRulesWithSymbolLHS(Symbol symbol) {
         List<Rule> rulesWithSymbolLHS = new ArrayList<>();
         for (Rule rule : rulesList) {
-            if (rule.getLeftHandSide().equals(symbol.getSymbolStr()))
+            if (rule.getLeftHandSide().equals(symbol))
                 rulesWithSymbolLHS.add(rule);
         }
-       return rulesWithSymbolLHS;
+        return rulesWithSymbolLHS;
     }
 
-    public List<Symbol> findFirstOfSymbol(Symbol symbol){
-        List<Symbol> firstOfList = new ArrayList<>();
+    public List<Symbol> findFirstOfSymbol(Symbol symbol) {
 
-        if(symbol.getType().equals("Terminal")){ // if symbol is terminal, then add it to its firstOfList and return
+        List<Symbol> firstOfList = new ArrayList<>();
+        if (symbol.isTerminal()) { // if symbol is terminal, then add it to its firstOfList and return
             firstOfList.add(symbol);
             return firstOfList;
         }
 
         List<Rule> rules = getRulesWithSymbolLHS(symbol); //productions with symbol as LHS
 
-        for(Rule rule: rules) {
+        for (Rule rule : rules) {
 
-            List<String> rhsSymbolList = rule.getRightHandSide();
+            List<Symbol> rhsSymbolList = rule.getRightHandSide();
 
             for (int i = 0; i < rhsSymbolList.size(); i++) {
 
                 //if rhs is epsilon => first symbol is epsilon ( a -> # )
-                String rhsSymbol = rhsSymbolList.get(i);
-                if (rhsSymbol.equals("#")) {
+                Symbol rhsSymbol = rhsSymbolList.get(i);
+                if (rhsSymbol.isEpsilon()) {
                     firstOfList.add(new Symbol("#"));
                     break;
                 }
 
                 //otherwise go find the first of the rhs
-                List<Symbol> firstOfRHSList = findFirstOfSymbol(new Symbol(rhsSymbol));
+                List<Symbol> firstOfRHSList = findFirstOfSymbol(rhsSymbol);
                 boolean containEpsilon = false;
                 int epsilonIndex = -1;
 
                 if (i == rhsSymbolList.size() - 1) {
                     // rhsSymbol is the last symbol in rhs. even if contains epsilon it must be added to the list. no need to check
                     // a-> bc , b->epsilon , c->epsilon
-                    mergeLists(firstOfList ,firstOfRHSList);
+                    mergeLists(firstOfList, firstOfRHSList);
                     continue;
                 }
 
                 for (int j = 0; j < firstOfRHSList.size(); j++) {
                     Symbol firstofRHS = firstOfRHSList.get(j);
-                    if (firstofRHS.getSymbolStr().equals("#")) {
+                    if (firstofRHS.isEpsilon()) {
                         epsilonIndex = j;
                         containEpsilon = true;
                         break;
@@ -78,12 +92,12 @@ public class Grammar {
                 }
 
                 if (!containEpsilon) {
-                    mergeLists(firstOfList ,firstOfRHSList);
+                    mergeLists(firstOfList, firstOfRHSList);
                     break;
                 }
                 //a-> bc , b-> epsilon => first a = first b - epsilon + first c
                 firstOfRHSList.remove(epsilonIndex);
-                mergeLists(firstOfList , firstOfRHSList );
+                mergeLists(firstOfList, firstOfRHSList);
 
             }
 
@@ -92,89 +106,128 @@ public class Grammar {
         return firstOfList;
     }
 
+    public List<Symbol> getFirstWithoutEpsilon(Symbol symbol) {
+        return this.findFirstOfSymbol(symbol).stream().filter(symb -> !symb.isEpsilon()).collect(Collectors.toList());
+    }
 
 
-    public List<Symbol> findFollowSymbol1(Symbol symbol){
-        List<Rule> rulesWithSymbolList = findRulesWithSymbol(symbol);
-        List<Symbol> followOfList = new ArrayList<>();
+    public List<Symbol> findFollowSymbol1(Symbol symbol) {
 
-        for(Rule rule : rulesWithSymbolList){
+        List<Rule> rulesWithSymbolList = rulesList.stream()
+                .filter(rule -> rule.getRightHandSide().contains(symbol))
+                .collect(Collectors.toList());
+        Set<Symbol> followOfList = new HashSet<>();
+        if (symbol.isStart())
+            followOfList.add(new Symbol("$"));
+        for (Rule rule : rulesWithSymbolList)
+            findFollowInRule(symbol, followOfList, rule);
 
-            List<String> rhsList = rule.getRightHandSide();
-            int symbolIndexInRhs = getSymbolIndexInRhs(symbol, rhsList);
-
-            for (int i = symbolIndexInRhs + 1; i <= rhsList.size() ; i++) {
-                if (i== rhsList.size())
-                    continue; //TODO FOllow = Follow left hand Side.
-                   // graph[symbol][rule.getLeftHandSide()] = true;
-
-                List<Symbol> firstOfNext = findFirstOfSymbol(new Symbol(rhsList.get(i)));
-                int epsIndex = searchForSymbolInList(firstOfNext , new Symbol("#"));
-               if (epsIndex != -1) {  //first contains epsilon
-                firstOfNext.remove(epsIndex);
-                mergeLists(followOfList , firstOfNext);
-                continue;
-               }
-
-               mergeLists(followOfList , firstOfNext);
-
-               break;
-
-            }
-        }
-return followOfList;
+        return new ArrayList<>(followOfList);
 
     }
 
+    private void findFollowInRule(Symbol symbol, Set<Symbol> followOfList, Rule rule) {
+        List<Symbol> rhsList = rule.getRightHandSide();
+        int symbolIndexInRhs = rhsList.indexOf(symbol);
+        if (symbolIndexInRhs < rhsList.size() - 1)
+            addUntilNonNull(followOfList, rule, rhsList, symbolIndexInRhs);
+        else if (!symbol.equals(rule.getLeftHandSide()))
+            followOfList.addAll(findFollowSymbol1(rule.getLeftHandSide()));
+    }
+
+    private void addUntilNonNull(Set<Symbol> followOfList, Rule rule, List<Symbol> rhsList, int symbolIndexInRhs) {
+        for (int index = symbolIndexInRhs + 1; index < rhsList.size(); index++) {
+            Symbol next = rhsList.get(index);
+            followOfList.addAll(getFirstWithoutEpsilon(next));
+            if (!isNullable(next))
+                break;
+            if (index == rhsList.size() - 1)
+                followOfList.addAll(findFollowSymbol1(rule.getLeftHandSide()));
+        }
+    }
+
     private void mergeLists(List<Symbol> list1, List<Symbol> list2) {
-        for(Symbol secondListSymbol : list2){
-            int symIndex = searchForSymbolInList(list1 , secondListSymbol);
+        for (Symbol secondListSymbol : list2) {
+            int symIndex = searchForSymbolInList(list1, secondListSymbol);
             if (symIndex == -1)
                 list1.add(secondListSymbol);
         }
     }
 
-    private int searchForSymbolInList(List<Symbol> firstOfNext , Symbol symbol) {
+    private int searchForSymbolInList(List<Symbol> firstOfNext, Symbol symbol) {
         String symStr = symbol.getSymbolStr();
         int symIndex = -1;
         for (int j = 0; j < firstOfNext.size(); j++) {
-            if (firstOfNext.get(j).getSymbolStr().equals(symStr)){
+            if (firstOfNext.get(j).getSymbolStr().equals(symStr)) {
                 symIndex = j;
                 break;
             }
         }
-        return symIndex ;
+        return symIndex;
     }
 
-    private int getSymbolIndexInRhs(Symbol symbol, List<String> rhsList) {
-        for(int i = 0; i<rhsList.size(); i++){
-            if (rhsList.get(i).equals(symbol.getSymbolStr())) {
-              return  i;
-            }
+
+    public boolean isNullable(Symbol symbol) {
+        return symbol.isEpsilon() || (!symbol.isTerminal() && rulesList.stream().filter(w -> w.getLeftHandSide().equals(symbol)).map(Rule::getRightHandSide).anyMatch(right -> right.stream().allMatch(this::isNullable)));
+    }
+
+    public List<Symbol> makePredictions(Rule rule) {
+        Set<Symbol> ans = new HashSet<>();
+        for (Symbol symbol : rule.getRightHandSide())
+            if (predictRuleForSymbol(rule, ans, symbol)) break;
+        return new ArrayList<>(ans);
+    }
+
+    private boolean predictRuleForSymbol(Rule rule, Set<Symbol> ans, Symbol symbol) {
+        if (isNullable(symbol)) {
+            if (symbol.isEpsilon())
+                ans.addAll(findFollowSymbol1(rule.getLeftHandSide()));
+            else
+                ans.addAll(findFirstOfSymbol(symbol));
+        } else {
+            if (symbol.isTerminal())
+                ans.add(symbol);
+            else
+                ans.addAll(findFirstOfSymbol(symbol));
+            return true;
         }
-        return -1;
-    }
-
-    public  List<Rule> findRulesWithSymbol(Symbol symbol){
-        List<Rule> rulesWithSymbolList = new ArrayList<>();
-        for(Rule rule: rulesList){
-         //search symbol in the right hand side
-            if(SearchInHandSides(symbol, rule))
-                rulesWithSymbolList.add(rule);
-        }
-        return rulesWithSymbolList;
-    }
-
-    private boolean SearchInHandSides(Symbol symbol, Rule rule) {
-        //check left hand_side
-            List<String> rhsList = rule.getRightHandSide();
-            for (String rhs : rhsList)
-                if (rhs.equals(symbol.getSymbolStr()))
-                {
-                    return true;
-                }
-//TODO may be left_hand_Side
         return false;
     }
+
+    public String buildTable() {
+        Rule[][] arr = new Rule[nonTerminals.size()][terminals.size()];
+        List<Symbol> rows = new ArrayList<>(nonTerminals);
+        List<Symbol> cols = new ArrayList<>(terminals);
+        for (var pr : this.rulesList)
+            makePredictionAndAddToTable(arr, rows, cols, pr);
+        TableStringFormatter formatter = new TableStringFormatter();
+        return formatter.stringifyTable(arr, rows, cols);
+    }
+
+    private void makePredictionAndAddToTable(Rule[][] arr, List<Symbol> rows, List<Symbol> cols, Rule pr) {
+        List<Symbol> prodRulePredict = makePredictions(pr);
+        Symbol left = pr.getLeftHandSide();
+        for (var symbol : prodRulePredict)
+            arr[rows.indexOf(left)][cols.indexOf(symbol)] = pr;
+    }
+
+    public void printTable() {
+        System.out.println(this.buildTable());
+    }
+
+    public void printFollows() {
+        nonTerminals.forEach(symbol -> {
+            System.out.print("Follow(" + symbol + ") :");
+            System.out.println(findFollowSymbol1(symbol));
+        });
+    }
+
+    public void printFirsts() {
+        nonTerminals.forEach(symbol -> {
+            System.out.print("First(" + symbol + ") :");
+            System.out.println(findFirstOfSymbol(symbol));
+        });
+    }
+
 }
 

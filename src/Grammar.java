@@ -17,6 +17,8 @@ public class Grammar {
             terminals.add(new Symbol("$"));
             rulesList.add(rule);
         }
+        isDependent = new HashMap<>();
+        nonTerminals.forEach(t -> isDependent.put(t, new HashMap<>()));
     }
 
     private void allocateMemory() {
@@ -110,12 +112,14 @@ public class Grammar {
         return this.findFirstOfSymbol(symbol).stream().filter(symb -> !symb.isEpsilon()).collect(Collectors.toList());
     }
 
+    Map<Symbol, Map<Symbol, Boolean>> isDependent;
 
     public List<Symbol> findFollowSymbol1(Symbol symbol) {
 
         List<Rule> rulesWithSymbolList = rulesList.stream()
                 .filter(rule -> rule.getRightHandSide().contains(symbol))
                 .collect(Collectors.toList());
+
         Set<Symbol> followOfList = new HashSet<>();
         if (symbol.isStart())
             followOfList.add(new Symbol("$"));
@@ -126,13 +130,23 @@ public class Grammar {
 
     }
 
+    public List<Symbol> findFollow(Symbol symbol) {
+        isDependent = new HashMap<>();
+        nonTerminals.forEach(t -> isDependent.put(t, new HashMap<>()));
+        return findFollowSymbol1(symbol);
+
+    }
+
+
     private void findFollowInRule(Symbol symbol, Set<Symbol> followOfList, Rule rule) {
         List<Symbol> rhsList = rule.getRightHandSide();
         int symbolIndexInRhs = rhsList.indexOf(symbol);
         if (symbolIndexInRhs < rhsList.size() - 1)
             addUntilNonNull(followOfList, rule, rhsList, symbolIndexInRhs);
-        else if (!symbol.equals(rule.getLeftHandSide()))
+        else if (!(isDependent.get(symbol).containsKey(rule.getLeftHandSide()) && isDependent.get(symbol).get(rule.getLeftHandSide())) && !symbol.equals(rule.getLeftHandSide())) {
+            isDependent.get(symbol).put(rule.getLeftHandSide(), true);
             followOfList.addAll(findFollowSymbol1(rule.getLeftHandSide()));
+        }
     }
 
     private void addUntilNonNull(Set<Symbol> followOfList, Rule rule, List<Symbol> rhsList, int symbolIndexInRhs) {
@@ -168,7 +182,9 @@ public class Grammar {
 
 
     public boolean isNullable(Symbol symbol) {
-        return symbol.isEpsilon() || (!symbol.isTerminal() && rulesList.stream().filter(w -> w.getLeftHandSide().equals(symbol)).map(Rule::getRightHandSide).anyMatch(right -> right.stream().allMatch(this::isNullable)));
+        return symbol.isEpsilon() || (!symbol.isTerminal() && rulesList
+                .stream().filter(w -> w.getLeftHandSide().equals(symbol))
+                .map(Rule::getRightHandSide).anyMatch(right -> right.stream().allMatch(this::isNullable)));
     }
 
     public List<Symbol> makePredictions(Rule rule) {
@@ -181,7 +197,7 @@ public class Grammar {
     private boolean predictRuleForSymbol(Rule rule, Set<Symbol> ans, Symbol symbol) {
         if (isNullable(symbol)) {
             if (symbol.isEpsilon())
-                ans.addAll(findFollowSymbol1(rule.getLeftHandSide()));
+                ans.addAll(findFollow(rule.getLeftHandSide()));
             else
                 ans.addAll(findFirstOfSymbol(symbol));
         } else {
@@ -207,8 +223,10 @@ public class Grammar {
     private void makePredictionAndAddToTable(Rule[][] arr, List<Symbol> rows, List<Symbol> cols, Rule pr) {
         List<Symbol> prodRulePredict = makePredictions(pr);
         Symbol left = pr.getLeftHandSide();
-        for (var symbol : prodRulePredict)
-            arr[rows.indexOf(left)][cols.indexOf(symbol)] = pr;
+        for (var symbol : prodRulePredict) {
+            if (!symbol.isEpsilon())
+                arr[rows.indexOf(left)][cols.indexOf(symbol)] = pr;
+        }
     }
 
     public void printTable() {
@@ -218,7 +236,7 @@ public class Grammar {
     public void printFollows() {
         nonTerminals.forEach(symbol -> {
             System.out.print("Follow(" + symbol + ") :");
-            System.out.println(findFollowSymbol1(symbol));
+            System.out.println(findFollow(symbol));
         });
     }
 

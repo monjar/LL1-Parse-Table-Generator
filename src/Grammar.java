@@ -143,10 +143,14 @@ public class Grammar {
         int symbolIndexInRhs = rhsList.indexOf(symbol);
         if (symbolIndexInRhs < rhsList.size() - 1)
             addUntilNonNull(followOfList, rule, rhsList, symbolIndexInRhs);
-        else if (!(isDependent.get(symbol).containsKey(rule.getLeftHandSide()) && isDependent.get(symbol).get(rule.getLeftHandSide())) && !symbol.equals(rule.getLeftHandSide())) {
+        else if (!isDependencyAdded(symbol, rule) && !symbol.equals(rule.getLeftHandSide())) {
             isDependent.get(symbol).put(rule.getLeftHandSide(), true);
             followOfList.addAll(findFollowSymbol1(rule.getLeftHandSide()));
         }
+    }
+
+    private boolean isDependencyAdded(Symbol symbol, Rule rule) {
+        return isDependent.get(symbol).containsKey(rule.getLeftHandSide()) && isDependent.get(symbol).get(rule.getLeftHandSide());
     }
 
     private void addUntilNonNull(Set<Symbol> followOfList, Rule rule, List<Symbol> rhsList, int symbolIndexInRhs) {
